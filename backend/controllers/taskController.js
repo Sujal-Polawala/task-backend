@@ -17,15 +17,22 @@ exports.getAllTasks = async (req, res) => {
 // Get task by ID
 exports.getTaskById = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id)
-      .populate("assignedTo")
-      .populate("createdBy");
+    const userId = req.user.id;
+    const taskId = req.params.id;
 
+    const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    res.json(task);
+    const isCreator = task.createdBy.toString() === userId;
+    const isAssignee = task.assignedTo?.toString() === userId;
+
+    if (!isCreator && !isAssignee) {
+      return res.status(403).json({ message: "You are not allowed to view this task." });
+    }
+
+    res.json({ task, isCreator, isAssignee });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
