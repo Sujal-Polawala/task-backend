@@ -17,22 +17,15 @@ exports.getAllTasks = async (req, res) => {
 // Get task by ID
 exports.getTaskById = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const taskId = req.params.id;
+    const task = await Task.findById(req.params.id)
+      .populate("assignedTo")
+      .populate("createdBy");
 
-    const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    const isCreator = task.createdBy.toString() === userId;
-    const isAssignee = task.assignedTo?.toString() === userId;
-
-    if (!isCreator && !isAssignee) {
-      return res.status(403).json({ message: "You are not allowed to view this task." });
-    }
-
-    res.json({ task, isCreator, isAssignee });
+    res.json(task);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -58,35 +51,31 @@ exports.createTask = async (req, res) => {
 // Update a task
 exports.updateTask = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id; // assuming your auth middleware sets req.user
     const { title, description, priority, status, dueDate } = req.body;
     const taskId = req.params.id;
 
+    // Step 1: Fetch the task
     const task = await Task.findById(taskId);
+
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    const isCreator = task.createdBy.toString() === userId;
-    const isAssignee = task.assignedTo?.toString() === userId; // assuming you have assignedTo field
-
-    if (!isCreator && !isAssignee) {
-      return res.status(403).json({ message: "You are not allowed to update this task." });
+    // Step 2: Check ownership
+    if (task.createdBy.toString() !== userId) {
+      return res.status(403).json({ message: "Unauthorized to update this task" });
     }
 
-    if (isCreator) {
-      // Creator can update everything
-      task.title = title;
-      task.description = description;
-      task.priority = priority;
-      task.status = status;
-      task.dueDate = dueDate;
-    } else if (isAssignee) {
-      // Assignee can only update status
-      task.status = status;
-    }
+    // Step 3: Update the task
+    task.title = title;
+    task.description = description;
+    task.priority = priority;
+    task.status = status;
+    task.dueDate = dueDate;
 
     const updatedTask = await task.save();
+
     res.json(updatedTask);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
